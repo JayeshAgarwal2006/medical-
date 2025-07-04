@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Health App</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="js" href="script.js">
+    <link rel="stylesheet" href="main.html">
+    </head>
+<body>
+    <div class="container">
+        <aside class="sidebar">
+            <div class="sidebar-content">
+                <div class="sidebar-logo">
+                    <img src="image/logo.png" alt="Medical Chatbot Logo">
+                </div>
+                <div class="sidebar-image-overlay"></div>
+                <div class="history-section">
+                    <h3>History</h3>
+                    <ul>
+                        <li>History</li>
+                        <li>History</li>
+                        <li>History</li>
+                    </ul>
+                </div>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <header class="navbar">
+                <div class="logo">Medibot </div>
+                <nav>
+                    <ul>
+                        <li><a href="#">Home</a></li>
+                        <li><a href="#">About</a></li>
+                        <li><a href="#">Contact Us</a></li>
+                    </ul>
+                </nav>
+                <div class="auth-buttons">
+                    <a href="#" id="loginLogoutBtn" class="login-button">Login</a>
+                </div>
+            </header>
+
+            <section class="hero-section">
+                <div class="hero-image-overlay"></div>
+                <div class="hero-text-container">
+                    <h1>Welcome to Medibot tell me your symptoms?</h1>
+                    <div class="search-bar-container">
+                        <div id="chatbox" class="chatbox"></div>
+
+                        <div class="input-send-container">
+                            <input type="text" id="userInput" class="search-input" placeholder="Type your symptoms or reminders...">
+                            <button id="sendButton" class="send-button" onclick="processInput()">&#10148;</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div id="loginModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <h2>Login</h2>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="username">Username:</label>
+                    <input type="text" id="username" name="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password:</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+                <button type="submit">Login</button>
+                <p id="loginMessage" class="message"></p>
+            </form>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
+
