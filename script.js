@@ -1,6 +1,14 @@
 let reminders = [];
 let chatHistory = []; // Array to store chat messages
 
+let editingMessageId = null; // To keep track of the message being edited
+let originalSendButtonFunction; // To store the original function of the send button
+
+// VOICE INPUT VARIABLES
+let speechRecognition; // Variable to hold the SpeechRecognition object
+let isRecording = false; // Flag to track recording status
+
+
 // 🩺 Symptom-diagnosis suggestions
 const symptoms = {
     "headache": "You can take Paracetamol or Crocin. Stay hydrated and rest.",
@@ -30,378 +38,394 @@ const symptoms = {
     "sleep problems": "Try meditation, avoid caffeine at night, or consult a doctor for melatonin."
 };
 
-// Moved bot processing logic into a separate function for reusability
-function processBotResponse(input, userMessageIndex) {
+function processBotResponse(input) {
     let botResponse = "";
+    const reminderMatch = input.match(/remind me to take (.+) at (\d{2}:\d{2})(?: on (\d{4}-\d{2}-\d{2}))?/i);
 
-    // 📌 Reminder pattern: "remind me to take <medicine> at <time>"
-    const reminderMatch = input.match(/remind me to take (.+) at (\d{2}:\d{2})/i);
     if (reminderMatch) {
         const medicine = reminderMatch[1].trim();
         const time = reminderMatch[2];
-        reminders.push({ medicine, time }); // You might want to update or remove old reminders if edited
-        botResponse = `✅ Reminder set for ${medicine} at ${time}.`;
+        const dateStr = reminderMatch[3];
+
+        let reminderDate;
+        if (dateStr) {
+            reminderDate = new Date(dateStr + 'T' + time);
+        } else {
+            reminderDate = new Date();
+            reminderDate.setHours(parseInt(time.substring(0, 2)), parseInt(time.substring(3, 5)), 0, 0);
+            if (reminderDate < new Date()) {
+                reminderDate.setDate(reminderDate.getDate() + 1);
+            }
+        }
+
+        if (isNaN(reminderDate.getTime())) {
+            botResponse = "❌ Invalid date or time format for reminder. Please use HH:MM and optionally YYYY-MM-DD.";
+        } else {
+            reminders.push({ medicine, time, date: reminderDate.toLocaleDateString() }); // Basic reminder storage
+            botResponse = `✅ Reminder set for ${medicine} at ${time} on ${reminderDate.toLocaleDateString()}.`;
+        }
     } else if (input.toLowerCase() === 'help') {
         botResponse = "💬 You can:\n- Ask: I have headache\n- Set: Remind me to take Crocin at 15:00\n- Ask: I have fever";
     } else {
-        // 📌 Check for symptoms in message
         let found = false;
         for (const symptom in symptoms) {
             if (input.toLowerCase().includes(symptom)) {
                 botResponse = `💡 ${symptoms[symptom]}`;
                 found = true;
-                break; // Found a symptom, no need to check others
+                break;
             }
         }
         if (!found) {
             botResponse = "❓ Sorry, I didn’t understand. Try saying:\n👉 I have stomach pain\n👉 Remind me to take Paracetamol at 15:00";
         }
     }
-    // Now, insert or update the bot's response right after the user's message
-    // If there's an existing bot response, update it. Otherwise, add a new one.
-    // This requires a bit more complex chat history management to link user-bot pairs.
-
-    // For simplicity, let's just add the bot response.
-    // If you want to update previous bot messages related to the user's edited message,
-    // you'd need to establish a relationship (e.g., user message index -> bot response index).
-    // For now, we'll assume a new bot message is generated and added after the edited user message.
-
-    // Find the next message in chatHistory to see if it's a bot's response to the user's message
-    // This is a simplified approach and might not be robust for complex conversations.
-    // A better approach for linking user-bot messages would be to store them as pairs
-    // or add a 'replyTo' field in the message object.
-    let botResponseIndex = -1;
-    if (userMessageIndex !== -1 && chatHistory.length > userMessageIndex + 1) {
-        const nextMessage = chatHistory[userMessageIndex + 1];
-        if (nextMessage.sender === 'bot' && nextMessage.originalUserIndex === userMessageIndex) {
-            botResponseIndex = userMessageIndex + 1;
-        }
-    }
-
-    addMessage(botResponse, 'bot', botResponseIndex, userMessageIndex); // Pass original user index
+    addMessage(botResponse, 'bot');
 }
+
 
 function processInput() {
     const input = document.getElementById("userInput").value.trim();
     if (!input) return;
 
-    // Add user message to chat and process it
-    // When adding a new user message, we don't know its final index yet,
-    // so we'll add it and then get its index for the bot response.
     addMessage(input, 'user');
     document.getElementById("userInput").value = "";
-
-    // After adding the user message, its index will be chatHistory.length - 1
-    const newUserMessageIndex = chatHistory.length - 1;
-    processBotResponse(input, newUserMessageIndex);
+    processBotResponse(input);
 }
 
-// 🧾 Show message in chat and save to history
-// index: position in chatHistory array (-1 for new message)
-// originalUserIndex: the index of the user message this bot message is responding to (optional)
-function addMessage(text, sender, index = -1, originalUserIndex = -1) {
+function addMessage(text, sender) {
     const chatbox = document.getElementById("chatbox");
-    let messageDiv;
-    let messageTextSpan;
+    const messageDiv = document.createElement("div");
+    const messageContentSpan = document.createElement("span"); // New span for content
 
-    if (index !== -1 && chatbox.children[index]) { // If updating an existing message
-        messageDiv = chatbox.children[index];
-        messageTextSpan = messageDiv.querySelector('.message-text');
-        messageTextSpan.innerText = text;
-        // Ensure actions are present if it's a user message being re-rendered
-        if (sender === 'user' && !messageDiv.querySelector('.message-actions')) {
-            // Re-add buttons if they somehow got lost (e.g., during full re-render after delete)
-            const actionsDiv = document.createElement('div');
-            actionsDiv.className = 'message-actions';
+    messageDiv.className = sender === 'bot' ? 'bot-message' : 'user-message';
+    messageContentSpan.className = 'message-content'; // Add class for content
+    messageContentSpan.textContent = text;
+    messageDiv.appendChild(messageContentSpan); // Append span to message div
 
-            const editButton = document.createElement('button');
-            editButton.className = 'edit-button';
-            editButton.innerHTML = '&#9998;'; // Pencil icon
-            editButton.title = 'Edit message';
-            editButton.onclick = () => editMessage(messageDiv, index);
+    const messageId = Date.now() + '-' + Math.random().toString(36).substring(2, 9); // Unique ID
+    messageDiv.setAttribute('data-message-id', messageId); // Store ID on the element
 
-            const deleteButton = document.createElement('button');
-            deleteButton.className = 'delete-button';
-            deleteButton.innerHTML = '&#128465;'; // Trash can icon
-            deleteButton.title = 'Delete message';
-            deleteButton.onclick = () => deleteMessage(messageDiv, index);
+    if (sender === 'user') {
+        const messageActionsDiv = document.createElement('div');
+        messageActionsDiv.className = 'message-actions';
 
-            actionsDiv.appendChild(editButton);
-            actionsDiv.appendChild(deleteButton);
-            messageDiv.appendChild(actionsDiv);
-        }
-    } else { // If adding a new message
-        messageDiv = document.createElement("div");
-        messageDiv.className = sender === 'bot' ? 'bot-message' : 'user-message';
+        const editBtn = document.createElement('button');
+        editBtn.className = 'edit-btn';
+        editBtn.innerHTML = '&#9998;'; // Pencil icon
+        editBtn.title = 'Edit Message';
+        editBtn.onclick = () => startEditMessage(messageId);
 
-        messageTextSpan = document.createElement('span');
-        messageTextSpan.className = 'message-text';
-        messageTextSpan.innerText = text;
-        messageDiv.appendChild(messageTextSpan);
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'delete-btn';
+        deleteBtn.innerHTML = '&#128465;'; // Wastebasket icon
+        deleteBtn.title = 'Delete Message';
+        deleteBtn.onclick = () => deleteMessage(messageId);
 
-        // Add edit/delete buttons only for new user messages
-        if (sender === 'user') {
-            const actionsDiv = document.createElement('div');
-            actionsDiv.className = 'message-actions';
-
-            const editButton = document.createElement('button');
-            editButton.className = 'edit-button';
-            editButton.innerHTML = '&#9998;'; // Pencil icon
-            editButton.title = 'Edit message';
-            // Index will be determined after push, so pass a function to update later
-            // Or re-render the whole chat for simplicity after edit (current approach)
-            editButton.onclick = () => {
-                const currentMessageIndex = Array.from(chatbox.children).indexOf(messageDiv);
-                editMessage(messageDiv, currentMessageIndex);
-            };
-
-            const deleteButton = document.createElement('button');
-            deleteButton.className = 'delete-button';
-            deleteButton.innerHTML = '&#128465;'; // Trash can icon
-            deleteButton.title = 'Delete message';
-            deleteButton.onclick = () => {
-                const currentMessageIndex = Array.from(chatbox.children).indexOf(messageDiv);
-                deleteMessage(messageDiv, currentMessageIndex);
-            };
-
-            actionsDiv.appendChild(editButton);
-            actionsDiv.appendChild(deleteButton);
-            messageDiv.appendChild(actionsDiv);
-        }
-        chatbox.appendChild(messageDiv);
+        messageActionsDiv.appendChild(editBtn);
+        messageActionsDiv.appendChild(deleteBtn);
+        messageDiv.appendChild(messageActionsDiv); // Append actions to message div
     }
 
-    chatbox.scrollTop = chatbox.scrollHeight; // Scroll to the bottom
+    chatbox.appendChild(messageDiv);
+    chatbox.scrollTop = chatbox.scrollHeight; // Auto-scroll to latest message
 
-    // Update chat history array and local storage
-    if (index === -1) { // New message
-        chatHistory.push({ text, sender, timestamp: new Date().toISOString(), originalUserIndex });
-    } else { // Update existing message
-        chatHistory[index] = { text, sender, timestamp: new Date().toISOString(), originalUserIndex };
-    }
-    localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
-
-    // Update sidebar history
-    updateSidebarHistory();
+    // Store message in chatHistory with its ID
+    chatHistory.push({ id: messageId, text, sender, timestamp: new Date().toISOString() });
+    updateSidebarHistory(); // Update sidebar history
 }
 
-// Function to load chat history from local storage and display it
-function loadChatHistory() {
-    const storedHistory = localStorage.getItem('chatHistory');
-    if (storedHistory) {
-        chatHistory = JSON.parse(storedHistory);
-        const chatbox = document.getElementById("chatbox");
-        chatbox.innerHTML = ''; // Clear existing messages
-        chatHistory.forEach((msg, index) => { // Pass index for re-rendering
-            // When loading, pass the stored originalUserIndex for bot messages
-            addMessage(msg.text, msg.sender, index, msg.originalUserIndex);
-        });
-        chatbox.scrollTop = chatbox.scrollHeight; // Scroll to the bottom
-    }
-    updateSidebarHistory(); // Populate sidebar history on load
-}
-
-// Function to update the sidebar history display (no change here)
 function updateSidebarHistory() {
     const historySectionUl = document.querySelector('.history-section ul');
-    historySectionUl.innerHTML = ''; // Clear previous history items
-
-    // Display only the last few messages in the sidebar for brevity
-    const displayCount = 5; // You can adjust this number
+    historySectionUl.innerHTML = ''; // Clear existing list
+    // Display only the last few messages for brevity in sidebar
+    const displayCount = 3;
     const recentHistory = chatHistory.slice(-displayCount);
 
     recentHistory.forEach(msg => {
         const listItem = document.createElement('li');
-        // Truncate long messages for sidebar display
-        const display_text = msg.text.length > 30 ? msg.text.substring(0, 27) + '...' : msg.text;
-        listItem.textContent = `${msg.sender}: ${display_text}`;
+        // Truncate long messages for display
+        const displayText = msg.text.length > 25 ? msg.text.substring(0, 22) + '...' : msg.text;
+        listItem.textContent = `${msg.sender}: ${displayText}`;
         historySectionUl.appendChild(listItem);
     });
-
-    // Add an option to clear history
-    if (chatHistory.length > 0) {
-        const clearHistoryItem = document.createElement('li');
-        clearHistoryItem.textContent = 'Clear History';
-        clearHistoryItem.style.cursor = 'pointer';
-        clearHistoryItem.style.fontWeight = 'bold';
-        clearHistoryItem.style.marginTop = '10px';
-        clearHistoryItem.addEventListener('click', clearChatHistory);
-        historySectionUl.appendChild(clearHistoryItem);
-    }
 }
 
-// Function to clear chat history (no change here)
-function clearChatHistory() {
-    if (confirm("Are you sure you want to clear all chat history?")) {
-        localStorage.removeItem('chatHistory');
-        chatHistory = []; // Clear the array
-        document.getElementById("chatbox").innerHTML = ''; // Clear chatbox
-        updateSidebarHistory(); // Update sidebar (should show empty)
-        addMessage("Chat history cleared.", 'bot'); // Confirm in chat
+// =========================================================================
+// EDIT/DELETE LOGIC
+// =========================================================================
+
+function deleteMessage(id) {
+    // Remove the message from the DOM
+    const messageElement = document.querySelector(`.chatbox div[data-message-id="${id}"]`);
+    if (messageElement) {
+        messageElement.remove();
     }
+
+    // Remove the message from chatHistory array
+    chatHistory = chatHistory.filter(msg => msg.id !== id);
+
+    // If the deleted message was being edited, cancel the edit
+    if (editingMessageId === id) {
+        cancelEdit();
+    }
+
+    updateSidebarHistory(); // Update sidebar after deletion
 }
 
-// NEW: Function to edit a message
-function editMessage(messageDiv, index) {
-    const messageTextSpan = messageDiv.querySelector('.message-text');
-    const currentText = messageTextSpan.innerText;
+function startEditMessage(id) {
+    const messageToEdit = chatHistory.find(msg => msg.id === id);
+    if (messageToEdit) {
+        document.getElementById('userInput').value = messageToEdit.text;
+        editingMessageId = id;
 
-    // Create an input field for editing
-    const editInput = document.createElement('input');
-    editInput.type = 'text';
-    editInput.className = 'edit-message-input';
-    editInput.value = currentText;
+        const sendButton = document.getElementById('sendButton');
+        const inputSendContainer = document.querySelector('.input-send-container');
 
-    // Replace the text span with the input field
-    messageDiv.replaceChild(editInput, messageTextSpan);
+        // Store original function and set new one
+        originalSendButtonFunction = sendButton.onclick;
+        sendButton.onclick = updateEditedMessage;
+        sendButton.innerHTML = '&#10003;'; // Checkmark icon for update
 
-    // Hide actions while editing
-    const actionsDiv = messageDiv.querySelector('.message-actions');
-    if (actionsDiv) actionsDiv.style.display = 'none';
-
-
-    editInput.focus(); // Focus on the input field
-    editInput.select(); // Select all text in the input field
-
-    // Handle saving the edit
-    const saveEdit = () => {
-        const newText = editInput.value.trim();
-        if (newText && newText !== currentText) { // Only save if text changed
-            // Update the chatHistory array for the user message
-            chatHistory[index].text = newText;
-            localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
-
-            // Replace the input field back with the updated text span
-            messageTextSpan.innerText = newText;
-            messageDiv.replaceChild(messageTextSpan, editInput);
-
-            // Re-process the bot's response based on the new user input
-            processBotResponse(newText, index); // Pass the index of the user message
-
-            updateSidebarHistory(); // Update sidebar after edit
-        } else if (newText === "") {
-            // If the user clears the text, treat it as a delete
-            deleteMessage(messageDiv, index);
-        } else { // No change or cancelled, just revert input to text
-            messageDiv.replaceChild(messageTextSpan, editInput);
+        // Create and add a "Cancel Edit" button
+        let cancelEditBtn = document.getElementById('cancelEditBtn');
+        if (!cancelEditBtn) {
+            cancelEditBtn = document.createElement('button');
+            cancelEditBtn.id = 'cancelEditBtn';
+            cancelEditBtn.className = 'cancel-edit-btn';
+            cancelEditBtn.innerHTML = '&#x2715;'; // 'X' icon
+            cancelEditBtn.title = 'Cancel Edit';
+            cancelEditBtn.onclick = cancelEdit;
+            // Insert it before the send button
+            inputSendContainer.insertBefore(cancelEditBtn, sendButton);
         }
-        if (actionsDiv) actionsDiv.style.display = 'flex'; // Show actions again
+
+        // Disable voice input button temporarily during edit
+        const voiceInputBtn = document.getElementById('voiceInputBtn');
+        if (voiceInputBtn) {
+            voiceInputBtn.disabled = true;
+            voiceInputBtn.classList.remove('active'); // Ensure no recording state
+            if (isRecording) { // If recording, stop it
+                speechRecognition.stop();
+            }
+        }
+    }
+}
+
+function updateEditedMessage() {
+    if (!editingMessageId) return; // Not in edit mode
+
+    const newText = document.getElementById('userInput').value.trim();
+    if (!newText) {
+        // If edited to be empty, delete the message
+        deleteMessage(editingMessageId);
+        cancelEdit(); // Reset state
+        return;
+    }
+
+    // Update the message in the DOM
+    const messageElement = document.querySelector(`.chatbox div[data-message-id="${editingMessageId}"] .message-content`);
+    if (messageElement) {
+        messageElement.textContent = newText;
+    }
+
+    // Update the message in chatHistory
+    const messageIndex = chatHistory.findIndex(msg => msg.id === editingMessageId);
+    if (messageIndex !== -1) {
+        chatHistory[messageIndex].text = newText;
+    }
+
+    cancelEdit(); // Reset UI state after update
+    processBotResponse(newText); // Get a bot response for the edited message
+}
+
+function cancelEdit() {
+    document.getElementById('userInput').value = '';
+    editingMessageId = null;
+
+    const sendButton = document.getElementById('sendButton');
+    // Restore original function and icon
+    sendButton.onclick = originalSendButtonFunction;
+    sendButton.innerHTML = '&#10148;'; // Original arrow icon
+
+    // Remove "Cancel Edit" button
+    const cancelEditBtn = document.getElementById('cancelEditBtn');
+    if (cancelEditBtn) {
+        cancelEditBtn.remove();
+    }
+
+    // Re-enable voice input button
+    const voiceInputBtn = document.getElementById('voiceInputBtn');
+    if (voiceInputBtn) {
+        voiceInputBtn.disabled = false;
+    }
+}
+
+
+// =========================================================================
+// VOICE INPUT LOGIC (re-integrated)
+// =========================================================================
+
+// Function to initialize SpeechRecognition
+function initializeSpeechRecognition() {
+    // Check if Web Speech API is supported
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+        console.error("Web Speech API is not supported by this browser.");
+        alert("Sorry, your browser doesn't support voice input. Please use Chrome, Edge, or a modern browser.");
+        // Hide the voice input button if API is not supported
+        const voiceInputBtn = document.getElementById('voiceInputBtn');
+        if (voiceInputBtn) {
+            voiceInputBtn.style.display = 'none';
+        }
+        return;
+    }
+
+    // Use webkitSpeechRecognition for better cross-browser compatibility
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    speechRecognition = new SpeechRecognition();
+
+    speechRecognition.continuous = false; // Don't keep listening after a pause
+    speechRecognition.interimResults = false; // Only return final results
+    speechRecognition.lang = 'en-US'; // Set language
+
+    // Event handler when a result is received
+    speechRecognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        document.getElementById('userInput').value = transcript;
+        // Automatically send the message after speech recognition if not editing
+        if (!editingMessageId) { // Only process as new input if not editing
+            processInput();
+        } else {
+            // If editing, just populate the field, user will manually update
+            // Or you could uncomment processInput() here if you want voice to "update" the current message
+            // processInput();
+        }
     };
 
-    editInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            saveEdit();
+    // Event handler when speech recognition ends (e.g., user stops speaking)
+    speechRecognition.onend = () => {
+        const voiceInputBtn = document.getElementById('voiceInputBtn');
+        if (voiceInputBtn) {
+            voiceInputBtn.classList.remove('active'); // Remove active class for styling
         }
-    });
+        isRecording = false;
+        document.getElementById('userInput').placeholder = 'Type your symptoms or reminders...'; // Reset placeholder
+        console.log('Speech recognition ended.');
+    };
 
-    // If focus is lost (user clicks away), save the edit
-    editInput.addEventListener('blur', () => {
-        saveEdit();
-    });
+    // Event handler for errors
+    speechRecognition.onerror = (event) => {
+        console.error('Speech recognition error:', event.error);
+        const voiceInputBtn = document.getElementById('voiceInputBtn');
+        if (voiceInputBtn) {
+            voiceInputBtn.classList.remove('active');
+        }
+        isRecording = false;
+        document.getElementById('userInput').placeholder = 'Type your symptoms or reminders...'; // Reset placeholder
+        if (event.error === 'not-allowed') {
+            alert('Microphone access denied. Please allow microphone access in your browser settings.');
+        } else if (event.error === 'no-speech') {
+            console.log('No speech detected.');
+        }
+    };
 }
 
-// NEW: Function to delete a message
-function deleteMessage(messageDiv, index) {
-    if (confirm("Are you sure you want to delete this message and its associated bot response?")) {
-        // Remove the user message
-        chatHistory.splice(index, 1);
+// Function to toggle voice input
+function toggleVoiceInput() {
+    // Prevent voice input if currently editing a message
+    if (editingMessageId) {
+        alert("Please finish or cancel editing the current message before using voice input.");
+        return;
+    }
 
-        // Find and remove the immediate bot response if it exists and was a response to this user message
-        // This relies on the 'originalUserIndex' property we're now adding.
-        let botResponseRemoved = false;
-        if (index < chatHistory.length) { // Check if there's a message after the deleted user message
-            if (chatHistory[index].sender === 'bot' && chatHistory[index].originalUserIndex === index) {
-                // The bot message immediately after was a response to the deleted user message
-                chatHistory.splice(index, 1); // Remove the bot message
-                botResponseRemoved = true;
-            } else if (index > 0 && chatHistory[index - 1].sender === 'user') { // Check if the previous message was a user message
-                // This is a more complex case if the bot response wasn't immediately after.
-                // For simplicity, we're only handling immediately following responses.
+    const voiceInputBtn = document.getElementById('voiceInputBtn');
+    if (isRecording) {
+        speechRecognition.stop(); // Stop recording
+    } else {
+        try {
+            speechRecognition.start(); // Start recording
+            if (voiceInputBtn) {
+                voiceInputBtn.classList.add('active'); // Add active class for styling
             }
-        }
-        // After deletion, re-index any subsequent bot messages whose originalUserIndex needs adjustment
-        // This is crucial to maintain correct linking between user and bot messages.
-        for (let i = index; i < chatHistory.length; i++) {
-            if (chatHistory[i].originalUserIndex !== undefined && chatHistory[i].originalUserIndex >= index) {
-                chatHistory[i].originalUserIndex--; // Decrement index if it was pointing to a message after the deleted one
+            isRecording = true;
+            document.getElementById('userInput').placeholder = 'Listening... Speak now!';
+        } catch (error) {
+            console.error("Error starting speech recognition:", error);
+            alert("Could not start voice input. Please ensure microphone is available and permissions are granted.");
+            if (voiceInputBtn) {
+                voiceInputBtn.classList.remove('active');
             }
+            isRecording = false;
         }
-
-
-        localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
-
-        // Reload history to re-render with correct indices (important after deletion)
-        loadChatHistory();
     }
 }
 
-// ⏰ Every minute check for reminders (no change here)
-setInterval(() => {
-    const now = new Date();
-    const currentTime = now.toTimeString().slice(0, 5); // format HH:MM
 
-    reminders.forEach((reminder, index) => { // Added index to safely remove
-        if (reminder.time === currentTime) {
-            addMessage(`⏰ Reminder: It's time to take your medicine: ${reminder.medicine}`, 'bot');
-            alert(`⏰ Medicine time! Take: ${reminder.medicine}`);
-            // Optionally, remove the reminder after it's triggered once
-            // reminders.splice(index, 1);
-        }
-    });
-}, 60000); // 60000 milliseconds = 1 minute
-
-// Event listener for Enter key on the input field (no change here)
+// Initial Load Event Listener
 document.addEventListener('DOMContentLoaded', () => {
     const userInput = document.getElementById('userInput');
+    const sendButton = document.getElementById('sendButton');
+    const voiceInputBtn = document.getElementById('voiceInputBtn'); // Get voice input button
+
+    // Set the initial send button function
+    originalSendButtonFunction = processInput;
+    sendButton.onclick = originalSendButtonFunction;
+
     if (userInput) {
         userInput.addEventListener('keypress', function(event) {
             if (event.key === 'Enter') {
-                processInput();
+                if (editingMessageId) {
+                    updateEditedMessage();
+                } else {
+                    processInput();
+                }
             }
         });
     }
-    loadChatHistory(); // Load history when the DOM is fully loaded
-});
 
-// Basic modal functionality for Login/Logout (from previous context - no change here)
-document.addEventListener('DOMContentLoaded', () => {
+    // Initialize Speech Recognition and attach event listener
+    initializeSpeechRecognition();
+    if (voiceInputBtn) { // Check if the button exists before adding listener
+        voiceInputBtn.addEventListener('click', toggleVoiceInput);
+    }
+
+    updateSidebarHistory(); // Load initial sidebar history (if any)
+
+    // Basic modal functionality for Login/Logout (unchanged)
     const loginLogoutBtn = document.getElementById('loginLogoutBtn');
     const loginModal = document.getElementById('loginModal');
     const closeButton = document.querySelector('.close-button');
     const loginForm = document.getElementById('loginForm');
     const loginMessage = document.getElementById('loginMessage');
 
-    let isLoggedIn = false; // Simple login state
+    let isLoggedIn = false;
 
     if (loginLogoutBtn) {
         loginLogoutBtn.addEventListener('click', (e) => {
             e.preventDefault();
             if (isLoggedIn) {
-                // Logout logic
                 isLoggedIn = false;
                 loginLogoutBtn.textContent = 'Login';
                 loginMessage.textContent = 'Logged out successfully.';
                 loginMessage.className = 'message success';
                 setTimeout(() => { loginMessage.textContent = ''; loginMessage.className = 'message'; }, 3000);
             } else {
-                loginModal.style.display = 'flex'; // Show modal
+                loginModal.style.display = 'flex';
             }
         });
     }
 
     if (closeButton) {
         closeButton.addEventListener('click', () => {
-            loginModal.style.display = 'none'; // Hide modal
-            loginMessage.textContent = ''; // Clear message on close
+            loginModal.style.display = 'none';
+            loginMessage.textContent = '';
             loginMessage.className = 'message';
         });
     }
 
-    // Close modal if user clicks outside of it
     window.addEventListener('click', (event) => {
         if (event.target === loginModal) {
             loginModal.style.display = 'none';
-            loginMessage.textContent = ''; // Clear message on close
+            loginMessage.textContent = '';
             loginMessage.className = 'message';
         }
     });
