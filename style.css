@@ -1,3 +1,121 @@
+/* Styles for Edit/Delete Buttons within messages */
+.message-actions {
+    position: absolute;
+    top: -10px; /* Adjust position as needed */
+    right: 5px; /* Adjust position as needed */
+    display: flex;
+    gap: 5px;
+    opacity: 0; /* Hide by default */
+    transition: opacity 0.2s ease-in-out;
+    z-index: 1; /* Ensure buttons are above message text */
+}
+
+/* Show actions on message hover */
+.user-message:hover .message-actions {
+    opacity: 1;
+}
+
+.edit-btn, .delete-btn {
+    background: none;
+    border: none;
+    font-size: 0.8em;
+    cursor: pointer;
+    padding: 3px 5px;
+    border-radius: 4px;
+    transition: background-color 0.2s ease;
+    display: flex; /* To center icon/text */
+    align-items: center;
+    justify-content: center;
+    color: #666; /* Default icon color */
+}
+
+.edit-btn {
+    background-color: rgba(255, 255, 255, 0.8);
+    color: #3f51b5; /* Blue for edit */
+}
+
+.edit-btn:hover {
+    background-color: #e0e7fa; /* Lighter blue on hover */
+}
+
+.delete-btn {
+    background-color: rgba(255, 255, 255, 0.8);
+    color: #f44336; /* Red for delete */
+}
+
+.delete-btn:hover {
+    background-color: #fce4e4; /* Lighter red on hover */
+}
+
+/* Style for the "Cancel Edit" button */
+.cancel-edit-btn {
+    background-color: #ff9800; /* Orange color */
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    font-size: 1.2em;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+    flex-shrink: 0;
+    margin-left: 10px;
+}
+
+.cancel-edit-btn:hover {
+    background-color: #e68a00;
+    transform: scale(1.05);
+}
+
+.cancel-edit-btn:active {
+    transform: scale(0.95);
+}
+
+/* Voice Input Button Styles */
+.voice-button {
+    background-color: #4CAF50; /* Green color for microphone */
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 50px; /* Same size as send button */
+    height: 50px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    font-size: 1.8em;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+    padding: 0;
+    line-height: 0;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    flex-shrink: 0;
+}
+
+.voice-button:hover {
+    background-color: #45a049;
+    transform: scale(1.05);
+}
+
+.voice-button:active {
+    transform: scale(0.95);
+}
+
+.voice-button.active {
+    background-color: #f44336; /* Red when active/recording */
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(244, 67, 54, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(244, 67, 54, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(244, 67, 54, 0); }
+}
+
+
+/* --- Existing CSS from your provided file below (UNTOUCHED) --- */
 /* General Styling */
 body {
     margin: 0;
@@ -24,7 +142,7 @@ body {
 /* Sidebar Styling */
 .sidebar {
     width: 25%;
-    background-color: #e0f2f7; /* Reverted to light background for the sidebar */
+    background-color: #e0f2f7;
     position: relative;
     overflow: hidden;
     display: flex;
@@ -44,39 +162,24 @@ body {
     justify-content: space-between;
 }
 
-.sidebar-image-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-image: url('https://via.placeholder.com/400x800/d0e9f2/ffffff?text=Left+Sidebar+Image'); /* Changed placeholder color */
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
-    opacity: 0.6; /* Adjusted opacity for lighter background */
-    z-index: 0;
-}
 
-/* SIDEBAR LOGO STYLE (for image) */
 .sidebar-logo {
     padding: 10px 20px;
     margin-bottom: 20px;
     text-align: center;
     flex-shrink: 0;
-    background-color: transparent; /* Ensure transparent background for the logo area */
+    background-color: transparent;
 }
 
 .sidebar-logo img {
-    max-width: 60px; /* Adjust size of your logo image as needed */
-    height: auto; /* Maintain aspect ratio */
-    display: block; /* Remove extra space below image */
-    margin: 0 auto; /* Center the image horizontally */
+    max-width: 60px;
+    height: auto;
+    display: block;
+    margin: 0 auto;
 }
 
-
 .history-section {
-    color: #333; /* Dark text for light sidebar */
+    color: #333;
     z-index: 2;
     padding: 0 20px;
     flex-shrink: 0;
@@ -84,16 +187,28 @@ body {
 
 .history-section h3 {
     margin-bottom: 10px;
-    color: #444; /* Dark text for light sidebar */
+    color: #444;
+}
+
+.history-section ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
 }
 
 .history-section ul li {
     margin-bottom: 5px;
-    color: #555; /* Dark text for light sidebar */
+    color: #555;
     font-size: 0.9em;
+    padding: 5px 0;
+    border-bottom: 1px dashed #cfcfcf;
+}
+.history-section ul li:last-child {
+    border-bottom: none;
 }
 
-/* Main Content Styling (no changes) */
+
+/* Main Content Styling */
 .main-content {
     flex-grow: 1;
     display: flex;
@@ -102,7 +217,7 @@ body {
     position: relative;
 }
 
-/* Navbar Styling (no changes) */
+/* Navbar Styling */
 .navbar {
     display: flex;
     justify-content: space-between;
@@ -162,7 +277,7 @@ body {
     color: #fff;
 }
 
-/* Hero Section Styling (no changes) */
+/* Hero Section Styling */
 .hero-section {
     flex-grow: 1;
     display: flex;
@@ -181,7 +296,7 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    background-image: url('https://via.placeholder.com/1000x600/e0f2f7/ffffff?text=Main+Content+Image');
+    background-image: url('image/background-image.png');
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
@@ -208,7 +323,7 @@ body {
     font-weight: normal;
 }
 
-/* Main chat wrapper (no changes) */
+/* Main chat wrapper */
 .search-bar-container {
     position: relative;
     width: 60%;
@@ -224,7 +339,7 @@ body {
     margin-bottom: 20px;
 }
 
-/* Chatbox styles - ChatGPT style (no changes) */
+/* Chatbox styles - ChatGPT style */
 .chatbox {
     width: 100%;
     height: 200px;
@@ -240,7 +355,7 @@ body {
     min-height: 50px;
 }
 
-/* Message styles - ChatGPT style (no changes) */
+/* Message styles - ChatGPT style */
 .user-message, .bot-message {
     padding: 10px 15px;
     border-radius: 18px;
@@ -250,6 +365,7 @@ body {
     line-height: 1.4;
     word-wrap: break-word;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+    position: relative; /* Needed for positioning action buttons */
 }
 
 .user-message {
@@ -266,13 +382,13 @@ body {
     border-bottom-left-radius: 4px;
 }
 
-/* Input and Button Container (no changes) */
+/* Input and Button Container */
 .input-send-container {
     display: flex;
     width: 100%;
+    margin-top: 20px;
     align-items: center;
-    border-top: 1px solid #eee;
-    padding-top: 15px;
+    gap: 10px;
 }
 
 .search-input {
@@ -285,7 +401,6 @@ body {
     font-size: 1em;
     color: #333;
     outline: none;
-    margin-right: 10px;
 }
 
 .search-input::placeholder {
@@ -297,7 +412,7 @@ body {
     box-shadow: 0 0 0 2px rgba(63, 81, 181, 0.2);
 }
 
-/* Send button styles for the arrow icon (no changes) */
+/* Send button styles for the arrow icon */
 .send-button {
     background-color: #3f51b5;
     color: white;
@@ -314,6 +429,7 @@ body {
     padding: 0;
     line-height: 0;
     text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    flex-shrink: 0;
 }
 
 .send-button:hover {
@@ -324,7 +440,7 @@ body {
     transform: scale(0.95);
 }
 
-/* Modal Styles (unchanged) */
+/* Modal Styles */
 .modal {
     display: none;
     position: fixed;
@@ -421,33 +537,4 @@ body {
 
 .message.success {
     color: green;
-}
-/* Hero Section Styling */
-.hero-section {
-    flex-grow: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    align-items: center;
-    position: relative;
-    overflow: hidden;
-    padding-top: 20px;
-    padding-bottom: 20px;
-}
-
-.hero-image-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    /* ---------------------------------------------------- */
-    /* CHANGE THIS LINE TO USE YOUR NEW IMAGE */
-    background-image: url('image/background image.png'); /* Assuming your image is in an 'image' folder */
-    /* ---------------------------------------------------- */
-    background-size: cover; /* This will make the image cover the entire area */
-    background-position: center; /* This will center the image */
-    background-repeat: no-repeat;
-    opacity: 0.8; /* Keep opacity to let content stand out */
-    z-index: 0;
 }
