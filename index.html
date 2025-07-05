@@ -5,9 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Health App</title>
     <link rel="stylesheet" href="style.css">
-    <link rel="js" href="script.js">
-    <link rel="stylesheet" href="main.html">
-    </head>
+</head>
 <body>
     <div class="container">
         <aside class="sidebar">
@@ -51,7 +49,9 @@
 
                         <div class="input-send-container">
                             <input type="text" id="userInput" class="search-input" placeholder="Type your symptoms or reminders...">
-                            <button id="sendButton" class="send-button" onclick="processInput()">&#10148;</button>
+                            <button id="voiceInputBtn" class="voice-button" title="Voice Input">
+                                &#x1F3A4; </button>
+                            <button id="sendButton" class="send-button">&#10148;</button>
                         </div>
                     </div>
                 </div>
@@ -81,4 +81,3 @@
     <script src="script.js"></script>
 </body>
 </html>
-
